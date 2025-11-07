@@ -1,0 +1,243 @@
+body {
+    background-image: url('public/Exp6Background.jpg');
+    background-size: 100vw 100vh;
+    background-position: fixed;
+    margin: 0;
+    overflow-x: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#notesAreaFrame {
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    top: 7vh;
+    height: 100%;
+    width: 100%;
+    padding: 20px;
+    gap: 20px;
+}
+
+#toolTip {
+    border: 2px solid rgb(57, 57, 57);
+    border-radius: 30px;
+    display: flex;
+    justify-content: center;
+    align-items: baseline;
+    height: max-content;
+    width: max-content;
+    padding: 0% 2%;
+    position: absolute;
+    top: 1vh;
+    left: 1vw;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.400);
+    backdrop-filter: blur(15px);
+
+    &>p {
+        justify-self: start;
+        font-size: large;
+        color: #000;
+        background-color: #fff;
+        padding: 0px 10px;
+        border-radius: 10px;
+    }
+
+    &>div {
+        height: 40px;
+        width: 40px;
+        justify-self: start;
+
+        &>div {
+            height: 40%;
+            width: 90%;
+            border: 2px solid black;
+            border-radius: 20px;
+            background: rgb(255, 0, 0);
+            display: flex;
+            transition: all 0.3s ease-in-out;
+
+
+            &>div {
+                height: 90%;
+                width: 40%;
+                border-radius: 50%;
+                background: rgb(0, 0, 0);
+                transition: all 0.3s ease-in-out;
+                margin-block: auto;
+                position: relative;
+                left: 4%;
+            }
+        }
+    }
+}
+
+.on {
+    background: rgb(0, 255, 0) !important;
+
+    &>div {
+        left: calc(100% - 44%) !important;
+    }
+}
+
+
+#myColorBox {
+    width: fit-content;
+    height: 60px;
+    background-color: rgba(0, 0, 0, 0.400);
+    backdrop-filter: blur(15px);
+    z-index: 99;
+    position: fixed;
+    right: 1vw;
+    top: 1vh;
+    display: flex;
+    justify-content: space-evenly;
+    align-items: center;
+    border-radius: 35px;
+    padding-inline: 10px;
+}
+
+/* --- UI Panels --- */
+#buttonPanel {
+    display: flex;
+    flex-direction: column;
+    justify-content: end;
+    align-items: center;
+    height: max-content;
+    width: max-content;
+    gap: 5px;
+    padding: 5px;
+    position: fixed;
+    top: calc((100vh - 380px) / 2);
+    left: 10px;
+    margin-left: 15px;
+    border-radius: 50px;
+    z-index: 99;
+    background-color: rgba(0, 0, 0, 0.400);
+    backdrop-filter: blur(15px);
+}
+
+/* --- Note Styling --- */
+.myTB {
+    border-radius: 15px;
+    width: 235px;
+    height: 165px;
+    resize: none;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: none;
+    padding: 10px;
+    font-size: 16px;
+}
+
+.myTB:focus {
+    z-index: 2;
+}
+
+.dragging {
+    opacity: 0.5;
+}
+
+/* --- Delete Area --- */
+#deleteArea {
+    height: 150px;
+    width: 150px;
+    background-image: url('public/DelAreaIcon.png');
+    background-size: cover;
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    border-radius: 15px;
+    z-index: 100;
+    opacity: 0;
+    visibility: hidden;
+    transform: scale(0.8);
+    transition: all 0.3s ease;
+}
+
+#deleteArea.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: scale(1);
+}
+
+#deleteArea.active {
+    transform: scale(1.2);
+    border: 3px dashed red;
+}
+
+/* --- General Button & Input Styling --- */
+#buttonPanel>* {
+    cursor: pointer;
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+}
+
+#createTB {
+    background-image: url('public/Exp6PlusIcon.png');
+    background-size: cover;
+    border: 2px solid gray;
+}
+
+#createTB:hover {
+    border: 2px solid rgb(99, 99, 99);
+}
+
+.Color {
+    border: none;
+    background-color: var(--color);
+}
+
+.Color:hover {
+    outline: 2px solid rgb(99, 99, 99);
+}
+
+#myColor {
+    height: 25px;
+    width: 70%;
+    border: none;
+    border-radius: 35px;
+    font-size: large;
+    padding-left: 10px;
+}
+
+#changeBg {
+    height: 25px;
+    width: 20%;
+    border-radius: 35px;
+    border: none;
+    background-image: url('changeColorIcon.png');
+    background-size: cover;
+}
+
+#delAll {
+    background-image: url('public/delAllIcon.png');
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+    border: none;
+    background-size: cover;
+}
+
+#delAll:hover {
+    border: 2px solid rgb(99, 99, 99);
+}
+
+#myTBcolor {
+    height: 40px;
+    width: 40px;
+    border-radius: 50%;
+    border: none;
+}
+
+@media all and (max-width: 600px) {
+    #notesAreaFrame {
+        top: 10vh;
+    }
+
+    #myColorBox {
+        top: calc(60px + 1vh);
+    }
+}
