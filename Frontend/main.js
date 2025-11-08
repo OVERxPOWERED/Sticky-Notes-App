@@ -7,12 +7,6 @@
     const myColor = document.getElementById('myColor');
     const changeBgBtn = document.getElementById('changeBg');
     const deleteArea = document.getElementById('deleteArea');
-    // const slidrFrm = document.querySelector('#slidrFrm');
-
-    // slidrFrm.addEventListener('click', () => {
-    //     slidrFrm.classList.toggle('on');
-
-    // })
 
 
     let currentColor = 'rgba(165, 255, 165,0.5)';
