@@ -8,6 +8,10 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+
+    & * {
+        font-family: 'Courier New', Courier, monospace;
+    }
 }
 
 #allControls {
@@ -17,7 +21,7 @@ body {
     width: 90%;
     margin: auto;
     position: fixed;
-    top: 10px;
+    top: 20px;
     z-index: 999;
     background-color: rgba(130, 130, 130, 0.4);
     backdrop-filter: blur(15px);
@@ -28,26 +32,15 @@ body {
     padding-inline: 20px;
 }
 
-#notesAreaFrame {
-    display: flex;
-    flex-wrap: wrap;
-    position: relative;
-    top: calc(70px + 10px + 20px);
-    height: calc(100vh - 70px - 10px - 40px - 20px);
-    /* here 
-    70px = "height of allControls"
-    10px = "top value of allControls"
-    40px = "vertical padding of topControls"
-    20px = "bonus pixels to create a gap b/w allControls and notesAreaFrame"
-    */
-    width: 100%;
-    padding: 20px;
-    gap: 20px;
+#appTitle {
+    font-size: 3rem;
+    font-weight: 900;
+    color: #fff;
+    font-family: 'Courier New', Courier, monospace;
 }
 
-
 #myColorBox {
-    width: 30%;
+    width: 20%;
     height: 80%;
     display: flex;
     justify-content: space-evenly;
@@ -80,10 +73,10 @@ body {
     display: flex;
     justify-content: end;
     align-items: center;
-    height: max-content;
-    width: max-content;
+    height: 80%;
+    width: 20%;
     gap: 10px;
-    padding: 10px;
+    padding: 0px 10px;
     border-radius: 50px;
 }
 
@@ -138,6 +131,24 @@ body {
 }
 
 
+#notesAreaFrame {
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    top: calc(70px + 10px + 20px);
+    height: calc(100vh - 70px - 10px - 40px - 20px);
+    /* here 
+    70px = "height of allControls"
+    10px = "top value of allControls"
+    40px = "vertical padding of topControls"
+    20px = "bonus pixels to create a gap b/w allControls and notesAreaFrame"
+    */
+    width: 100%;
+    padding: 20px;
+    gap: 20px;
+}
+
+
 /* --- Note Styling --- */
 .myTB {
     border-radius: 15px;
@@ -148,6 +159,11 @@ body {
     border: none;
     padding: 10px;
     font-size: 16px;
+
+    &::placeholder {
+        color: #fff;
+        opacity: 1;
+    }
 }
 
 .myTB:focus {

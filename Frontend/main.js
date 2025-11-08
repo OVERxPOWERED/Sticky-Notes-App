@@ -9,9 +9,9 @@
     const deleteArea = document.getElementById('deleteArea');
 
 
-    let currentColor = 'rgba(165, 255, 165,0.5)';
+    let currentColor = 'rgba(165, 255, 165,0.7)';
     let colorIndex = 0;
-    const defaultColors = ['rgba(165, 255, 165,0.5)', 'rgba(255, 255, 152,0.5)', 'rgba(255, 178, 191,0.5)', 'rgba(153, 255, 255,0.5)'];
+    const defaultColors = ['rgba(165, 255, 165,0.7)', 'rgba(255, 255, 152,0.7)', 'rgba(255, 178, 191,0.7)', 'rgba(153, 255, 255,0.7)'];
 
     const changeBg = () => {
         if (myColor.value === '') {
