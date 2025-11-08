@@ -35,7 +35,8 @@ body {
 #appTitle {
     font-size: 3rem;
     font-weight: 900;
-    color: #ffff;
+    color: rgb(255, 255, 255);
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
     font-family: 'Courier New', Courier, monospace;
 }
 
