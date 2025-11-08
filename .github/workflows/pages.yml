@@ -2,7 +2,8 @@ name: Deploy Frontend to GitHub Pages
 
 on:
   push:
-    branches: [ main ]     # change if your default branch is different
+    branches: [ main ]      # change if needed
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -18,14 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      # If you ever add a build step (npm build, vite, etc.), do it here.
-      # For now, we just publish the static Frontend folder as-is.
       - name: Upload artifact (Frontend folder)
         uses: actions/upload-pages-artifact@v3
         with:
-          path: Frontend
-
+          path: Frontend      # must match your folder name & case
   deploy:
     needs: build
     runs-on: ubuntu-latest
