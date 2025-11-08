@@ -1,5 +1,6 @@
 body {
-    background-image: url('public/Exp6Background.jpg');
+    /* background-image: url('public/Exp6Background.jpg'); */
+    background-image: url(public/notesAreaBg.jpg);
     background-size: 100vw 100vh;
     background-position: fixed;
     margin: 0;
