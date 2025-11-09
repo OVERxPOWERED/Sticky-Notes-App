@@ -33,13 +33,16 @@ body {
 }
 
 #appTitle {
-    font-size: 3rem;
+    height: 100%;
+    width: 100%;
+    text-align: center;
     font-weight: 900;
     color: rgb(255, 255, 255);
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
     font-family: 'Courier New', Courier, monospace;
     white-space: nowrap;
     margin: auto;
+    font-size: clamp(1.5rem, 5vw, 2.5rem);
 }
 
 #menuBtn {
