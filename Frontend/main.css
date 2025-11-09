@@ -164,8 +164,9 @@ body {
     display: flex;
     flex-wrap: wrap;
     position: relative;
+    flex-direction: row;
     top: calc(70px + 10px + 20px);
-    height: calc(100vh - 70px - 10px - 40px - 20px);
+    /* height: calc(100vh - 70px - 10px - 40px - 20px); */
     /* here 
     70px = "height of allControls"
     10px = "top value of allControls"
@@ -175,6 +176,8 @@ body {
     width: 100%;
     padding: 20px;
     gap: 20px;
+    justify-content: center;
+    align-items: flex-start;
 }
 
 
