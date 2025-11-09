@@ -7,6 +7,14 @@
     const myColor = document.getElementById('myColor');
     const changeBgBtn = document.getElementById('changeBg');
     const deleteArea = document.getElementById('deleteArea');
+    const menuBtn = document.getElementById('menuBtn');
+    const myColorBox = document.getElementById('myColorBox');
+    const buttonPanel = document.getElementById('buttonPanel');
+
+    menuBtn.addEventListener('click', () => {
+        myColorBox.classList.toggle('slide');
+        buttonPanel.classList.toggle('slide');
+    })
 
 
     let currentColor = 'rgba(165, 255, 165,0.7)';
