@@ -177,7 +177,6 @@ body {
     padding: 20px;
     gap: 20px;
     justify-content: center;
-    align-items: flex-start;
 }
 
 
@@ -250,11 +249,13 @@ body {
         justify-content: center;
         gap: 20px;
         transition: all 0.5s cubic-bezier(.51, -0.01, .55, 1.65);
+        display: none;
     }
 
     .slide {
         top: var(--slide) !important;
         opacity: 1 !important;
+        display: block !important;
     }
 
     #buttonPanel {
@@ -273,6 +274,7 @@ body {
         20: padding on left and right end.
         */
         transition: all 0.5s cubic-bezier(.51, -0.01, .55, 1.65);
+        display: none;
     }
 
     #menuBtn {
