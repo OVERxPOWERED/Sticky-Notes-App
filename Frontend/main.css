@@ -235,11 +235,15 @@ body {
 
 
 @media all and (max-width: 1250px) {
+    #allControls{
+        transform: scale(.9);
+    }
+
     #myColorBox {
         position: absolute;
         z-index: -1;
-        right: 0px;
         opacity: 0;
+        left: calc((100vw - 400px) / 2);
         background-color: rgba(130, 130, 130, 0.4);
         backdrop-filter: blur(15px);
         --slide: 70px;
@@ -248,18 +252,20 @@ body {
         width: max-content;
         justify-content: center;
         gap: 20px;
-        transition: all 0.5s cubic-bezier(.51, -0.01, .55, 1.65);
-        display: none;
+        transition: top 0.5s cubic-bezier(.51, -0.01, .55, 1.65), opacity 0.5s cubic-bezier(.51, -0.01, .55, 1.65);
+        pointer-events: none;
+        transform: scale(.9);
     }
 
     .slide {
         top: var(--slide) !important;
         opacity: 1 !important;
-        display: block !important;
+        pointer-events: all !important;
     }
 
     #buttonPanel {
         position: absolute;
+        left: calc((100vw - 280px) / 2);
         z-index: -2;
         opacity: 0;
         background-color: rgba(130, 130, 130, 0.4);
@@ -267,14 +273,9 @@ body {
         --slide: 130px;
         top: 0px;
         margin-top: 15px;
-        left: calc(100% - 280px - 60px - 20px);
-        /*
-        280: Sum of width of each button
-        60: padding between each button
-        20: padding on left and right end.
-        */
         transition: all 0.5s cubic-bezier(.51, -0.01, .55, 1.65);
-        display: none;
+        pointer-events: none;
+        transform: scale(.9);
     }
 
     #menuBtn {
