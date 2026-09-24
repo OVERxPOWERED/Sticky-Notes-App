@@ -26,7 +26,7 @@ body {
     background-color: rgba(130, 130, 130, 0.4);
     backdrop-filter: blur(15px);
     display: flex;
-    justify-content: center;
+    justify-content: space-between;
     align-items: center;
     gap: 50px;
     padding-inline: 20px;
@@ -237,6 +237,7 @@ body {
 @media all and (max-width: 1250px) {
     #allControls{
         transform: scale(.9);
+        justify-content: center;
     }
 
     #myColorBox {
