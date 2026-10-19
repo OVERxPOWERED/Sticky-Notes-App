@@ -1,14 +1,8 @@
-const { v4: uuidv4 } = require('uuid');
-
-/**
- * In-memory note store for Milestone 1 (will be replaced with MongoDB in Milestone 2)
- * @type {Map<string, Object>}
- */
-const notesStore = new Map();
+const Note = require('../models/Note');
 
 /**
  * NoteService - Handles all note-related business logic
- * Provides CRUD operations with in-memory storage
+ * Provides CRUD operations with MongoDB persistence via Mongoose
  */
 class NoteService {
   /**
@@ -79,18 +73,19 @@ class NoteService {
    */
   async create(data) {
     const validatedData = NoteService.validateNoteData(data);
-    const now = new Date().toISOString();
-    const id = uuidv4();
-
-    const note = {
-      id,
-      ...validatedData,
-      createdAt: now,
-      updatedAt: now
-    };
-
-    notesStore.set(id, note);
-    return { ...note };
+    
+    try {
+      const note = await Note.create(validatedData);
+      return note.toObject();
+    } catch (error) {
+      if (error.name === 'ValidationError') {
+        const validationError = new Error('Validation failed');
+        validationError.name = 'ValidationError';
+        validationError.details = Object.values(error.errors).map(e => e.message);
+        throw validationError;
+      }
+      throw error;
+    }
   }
 
   /**
@@ -102,12 +97,20 @@ class NoteService {
     if (!id || typeof id !== 'string') {
       return null;
     }
-    const note = notesStore.get(id);
-    return note ? { ...note } : null;
+    
+    try {
+      const note = await Note.findById(id).lean();
+      return note || null;
+    } catch (error) {
+      if (error.name === 'CastError') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   /**
-   * Retrieves all notes with optional pagination and filtering
+   * Retrieves all notes with optional pagination, filtering, and sorting
    * @param {Object} options - Query options
    * @param {number} [options.page=1] - Page number (1-indexed)
    * @param {number} [options.limit=20] - Items per page (max 100)
@@ -133,72 +136,84 @@ class NoteService {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-    // Get all notes as array
-    let notes = Array.from(notesStore.values());
-
-    // Apply filters
+    // Build query filter
+    const filter = {};
+    
     if (search) {
-      const searchLower = search.toLowerCase();
-      notes = notes.filter(note =>
-        note.title.toLowerCase().includes(searchLower) ||
-        note.content.toLowerCase().includes(searchLower)
-      );
+      const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [
+        { title: searchRegex },
+        { content: searchRegex }
+      ];
     }
-
+    
     if (tags && Array.isArray(tags) && tags.length > 0) {
-      const tagSet = new Set(tags.map(t => t.toLowerCase()));
-      notes = notes.filter(note =>
-        note.tags.some(tag => tagSet.has(tag))
-      );
+      filter.tags = { $all: tags.map(t => t.trim().toLowerCase()) };
     }
-
+    
     if (isPinned !== undefined) {
-      notes = notes.filter(note => note.isPinned === isPinned);
+      filter.isPinned = isPinned === true || isPinned === 'true';
     }
 
-    // Apply sorting
-    const validSortFields = ['title', 'createdAt', 'updatedAt', 'isPinned'];
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'updatedAt';
-    const order = sortOrder === 'asc' ? 1 : -1;
+    // Build sort object
+    const allowedSortFields = ['title', 'createdAt', 'updatedAt', 'isPinned'];
+    const sortField = allowedSortFields.includes(sortBy) ? sortBy : 'updatedAt';
+    const sortDirection = sortOrder === 'asc' ? 1 : -1;
+    const sort = { [sortField]: sortDirection };
 
-    notes.sort((a, b) => {
-      const aVal = a[sortField];
-      const bVal = b[sortField];
-      if (aVal < bVal) return -1 * order;
-      if (aVal > bVal) return 1 * order;
-      return 0;
-    });
+    try {
+      // Execute queries in parallel
+      const [notes, total] = await Promise.all([
+        Note.find(filter)
+          .sort(sort)
+          .skip((pageNum - 1) * limitNum)
+          .limit(limitNum)
+          .lean(),
+        Note.countDocuments(filter)
+      ]);
 
-    // Pinned notes first (secondary sort)
-    notes.sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
-      return 0;
-    });
-
-    // Calculate pagination
-    const total = notes.length;
-    const totalPages = Math.ceil(total / limitNum);
-    const start = (pageNum - 1) * limitNum;
-    const end = start + limitNum;
-    const data = notes.slice(start, end).map(note => ({ ...note }));
-
-    return {
-      data,
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages,
-        hasNext: pageNum < totalPages,
-        hasPrev: pageNum > 1
-      }
-    };
+      return {
+        data: notes,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+          hasNext: pageNum < Math.ceil(total / limitNum),
+          hasPrev: pageNum > 1
+        }
+      };
+    } catch (error) {
+      throw error;
+    }
   }
 
   /**
    * Updates a note by ID
    * @param {string} id - Note ID
-   * @param {Object} data - Updated note data (partial allowed)
+   * @param {Object} data - Updated note data
    * @returns {Promise<Object|null>} Updated note or null if not found
-   * @throws {Error} If
+   */
+  async update(id, data) {
+    if (!id || typeof id !== 'string') {
+      return null;
+    }
+
+    const validatedData = NoteService.validateNoteData(data);
+    
+    try {
+      const note = await Note.findByIdAndUpdate(
+        id,
+        { $set: validatedData },
+        { new: true, runValidators: true }
+      ).lean();
+      
+      return note || null;
+    } catch (error) {
+      if (error.name === 'CastError') {
+        return null;
+      }
+      if (error.name === 'ValidationError') {
+        const validationError = new Error('Validation failed');
+        validationError.name = 'ValidationError';
+        validation
