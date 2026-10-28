@@ -1,7 +1,10 @@
-class Cache {
+const { createClient } = require('redis');
+const { config } = require('../config/env');
+
+class InMemoryCache {
   constructor(options = {}) {
     this.maxSize = options.maxSize || 1000;
-    this.defaultTtl = options.defaultTtl || 30000;
+    this.defaultTtl = options.defaultTtl || config.cache.ttlMs;
     this.store = new Map();
     this.hits = 0;
     this.misses = 0;
@@ -67,7 +70,8 @@ class Cache {
       size: this.store.size,
       hits: this.hits,
       misses: this.misses,
-      hitRate: total > 0 ? this.hits / total : 0
+      hitRate: total > 0 ? this.hits / total : 0,
+      backend: 'memory'
     };
   }
 
@@ -87,58 +91,266 @@ class Cache {
       this.accessOrder.delete(oldestKey);
     }
   }
+
+  async disconnect() {
+    // No-op for in-memory cache
+  }
 }
 
-const globalCache = new Cache();
+class RedisCache {
+  constructor(options = {}) {
+    this.client = options.client;
+    this.defaultTtl = options.defaultTtl || config.cache.ttlMs;
+    this.keyPrefix = options.keyPrefix || config.cache.keyPrefix;
+    this.hits = 0;
+    this.misses = 0;
+    this.connected = false;
+  }
 
-function cacheMiddleware(ttlMs = 30000) {
-  return (req, res, next) => {
-    if (!req.app.locals.cache) {
-      req.app.locals.cache = globalCache;
+  _prefixedKey(key) {
+    return `${this.keyPrefix}${key}`;
+  }
+
+  async connect() {
+    if (!this.client) {
+      throw new Error('Redis client not provided');
     }
+    if (!this.connected) {
+      await this.client.connect();
+      this.connected = true;
+    }
+  }
+
+  async get(key) {
+    if (!this.connected) {
+      await this.connect();
+    }
+
+    const prefixedKey = this._prefixedKey(key);
+    const value = await this.client.get(prefixedKey);
+
+    if (value === null) {
+      this.misses++;
+      return undefined;
+    }
+
+    this.hits++;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
+
+  async set(key, value, ttl = this.defaultTtl) {
+    if (!this.connected) {
+      await this.connect();
+    }
+
+    const prefixedKey = this._prefixedKey(key);
+    const serialized = JSON.stringify(value);
+    const ttlSeconds = Math.ceil(ttl / 1000);
+
+    if (ttl > 0) {
+      await this.client.setEx(prefixedKey, ttlSeconds, serialized);
+    } else {
+      await this.client.set(prefixedKey, serialized);
+    }
+  }
+
+  async invalidate(pattern) {
+    if (!this.connected) {
+      await this.connect();
+    }
+
+    const prefixedPattern = this._prefixedKey(pattern.replace('*', ''));
+    const keys = await this.client.keys(`${prefixedPattern}*`);
+
+    if (keys.length > 0) {
+      await this.client.del(keys);
+    }
+
+    return keys.length;
+  }
+
+  async clear() {
+    if (!this.connected) {
+      await this.connect();
+    }
+
+    const keys = await this.client.keys(`${this.keyPrefix}*`);
+    if (keys.length > 0) {
+      await this.client.del(keys);
+    }
+
+    this.hits = 0;
+    this.misses = 0;
+    return keys.length;
+  }
+
+  getStats() {
+    const total = this.hits + this.misses;
+    return {
+      size: -1, // Redis doesn't provide easy size without scanning
+      hits: this.hits,
+      misses: this.misses,
+      hitRate: total > 0 ? this.hits / total : 0,
+      backend: 'redis',
+      connected: this.connected
+    };
+  }
+
+  async disconnect() {
+    if (this.connected && this.client) {
+      await this.client.quit();
+      this.connected = false;
+    }
+  }
+}
+
+function createCacheBackend() {
+  if (config.cache.useRedis && config.redis.url) {
+    const redisClient = createClient({
+      url: config.redis.url,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries > 10) {
+            console.error('Redis max retries reached, falling back to in-memory cache');
+            return new Error('Max retries reached');
+          }
+          return Math.min(retries * 100, 3000);
+        }
+      }
+    });
+
+    redisClient.on('error', (err) => {
+      console.error('Redis cache error:', err.message);
+    });
+
+    redisClient.on('connect', () => {
+      console.log('Redis cache connected');
+    });
+
+    redisClient.on('reconnecting', () => {
+      console.log('Redis cache reconnecting...');
+    });
+
+    return new RedisCache({
+      client: redisClient,
+      defaultTtl: config.cache.ttlMs,
+      keyPrefix: config.cache.keyPrefix
+    });
+  }
+
+  return new InMemoryCache({
+    maxSize: config.cache.maxSize,
+    defaultTtl: config.cache.ttlMs
+  });
+}
+
+const cache = createCacheBackend();
+
+async function warmCache(noteService) {
+  if (!config.cache.warmOnStartup) {
+    return;
+  }
+
+  try {
+    console.log('Starting cache warming...');
+
+    const recentNotes = await noteService.getRecentNotes(config.cache.warmRecentCount || 50);
+    for (const note of recentNotes) {
+      const key = `note:${note.id}`;
+      await cache.set(key, note, config.cache.ttlMs);
+    }
+
+    const pinnedNotes = await noteService.getPinnedNotes();
+    for (const note of pinnedNotes) {
+      const key = `note:${note.id}`;
+      await cache.set(key, note, config.cache.ttlMs * 2);
+    }
+
+    console.log(`Cache warmed with ${recentNotes.length} recent and ${pinnedNotes.length} pinned notes`);
+  } catch (error) {
+    console.error('Cache warming failed:', error.message);
+  }
+}
+
+function cacheMiddleware(ttlMs = config.cache.ttlMs) {
+  return (req, res, next) => {
+    req.app.locals.cache = cache;
 
     const cacheKey = `${req.method}:${req.originalUrl}:${JSON.stringify(req.query)}`;
 
     if (req.method === 'GET') {
-      const cached = globalCache.get(cacheKey);
-      if (cached !== undefined) {
-        res.set('X-Cache', 'HIT');
-        return res.json(cached);
-      }
-    }
-
-    const originalJson = res.json.bind(res);
-    res.json = (body) => {
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        if (req.method === 'GET') {
-          globalCache.set(cacheKey, body, ttlMs);
-        } else if (['POST', 'PATCH', 'DELETE', 'PUT'].includes(req.method)) {
-          globalCache.invalidate('/api/notes');
+      cache.get(cacheKey).then((cached) => {
+        if (cached !== undefined) {
+          res.set('X-Cache', 'HIT');
+          return res.json(cached);
         }
-      }
-      return originalJson(body);
-    };
 
-    next();
+        const originalJson = res.json.bind(res);
+        res.json = (body) => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            if (req.method === 'GET') {
+              cache.set(cacheKey, body, ttlMs).catch((err) => {
+                console.error('Cache set error:', err.message);
+              });
+            } else if (['POST', 'PATCH', 'DELETE', 'PUT'].includes(req.method)) {
+              cache.invalidate('/api/notes').catch((err) => {
+                console.error('Cache invalidate error:', err.message);
+              });
+            }
+          }
+          return originalJson(body);
+        };
+
+        next();
+      }).catch((err) => {
+        console.error('Cache get error:', err.message);
+        next();
+      });
+    } else {
+      const originalJson = res.json.bind(res);
+      res.json = (body) => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          if (['POST', 'PATCH', 'DELETE', 'PUT'].includes(req.method)) {
+            cache.invalidate('/api/notes').catch((err) => {
+              console.error('Cache invalidate error:', err.message);
+            });
+          }
+        }
+        return originalJson(body);
+      };
+      next();
+    }
   };
 }
 
-function invalidateCache(pattern) {
-  return globalCache.invalidate(pattern);
+async function invalidateCache(pattern) {
+  return cache.invalidate(pattern);
 }
 
-function clearCache() {
-  globalCache.clear();
+async function clearCache() {
+  return cache.clear();
 }
 
 function getCacheStats() {
-  return globalCache.getStats();
+  return cache.getStats();
+}
+
+async function disconnectCache() {
+  await cache.disconnect();
 }
 
 module.exports = {
-  Cache,
+  InMemoryCache,
+  RedisCache,
+  cache,
   cacheMiddleware,
   invalidateCache,
   clearCache,
-  getCacheStats
+  getCacheStats,
+  disconnectCache,
+  warmCache
 };
