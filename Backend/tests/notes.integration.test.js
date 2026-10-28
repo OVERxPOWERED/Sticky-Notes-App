@@ -1,0 +1,1 @@
+{"action": "list_dir", "path": "Backend", "reason": "Explore project structure to understand existing codebase"}
