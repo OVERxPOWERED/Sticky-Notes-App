@@ -5,7 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "test:coverage": "nyc --reporter=lcov --reporter=text-summary --reporter=html npm test",
+    "test:ci": "nyc --check-coverage --lines 80 --functions 80 --branches 75 --statements 80 npm test"
   },
   "author": "",
   "license": "ISC",
@@ -17,5 +20,72 @@
     "mongodb": "^7.0.0",
     "mongoose": "^8.19.3",
     "nodemon": "^3.1.10"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nyc": "^17.1.0",
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0"
+  },
+  "nyc": {
+    "exclude": [
+      "**/*.test.js",
+      "**/*.spec.js",
+      "**/test/**",
+      "**/tests/**",
+      "**/__mocks__/**",
+      "**/coverage/**",
+      "**/node_modules/**",
+      "**/*.config.js",
+      "**/*.config.mjs",
+      "**/*.config.cjs",
+      "**/babel.config.*",
+      "**/jest.config.*",
+      "**/nyc.config.*",
+      "src/index.js",
+      "index.js"
+    ],
+    "extension": [
+      ".js",
+      ".mjs"
+    ],
+    "require": [
+      "@babel/register"
+    ],
+    "sourceMap": true,
+    "instrument": true,
+    "all": true,
+    "check-coverage": false
+  },
+  "babel": {
+    "presets": [
+      [
+        "@babel/preset-env",
+        {
+          "targets": {
+            "node": "current"
+          },
+          "modules": false
+        }
+      ]
+    ],
+    "sourceType": "module"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "transform": {},
+    "moduleFileExtensions": [
+      "js",
+      "mjs"
+    ],
+    "testMatch": [
+      "**/*.test.js"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/index.js"
+    ],
+    "coverageDirectory": "coverage",
+    "verbose": true
   }
 }
