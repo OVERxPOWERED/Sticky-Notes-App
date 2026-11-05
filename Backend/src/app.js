@@ -1,5 +1,7 @@
 import express from 'express';
 import cors from 'cors';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './docs/swagger.js';
 import notesRouter from './routes/notes.routes.js';
 import healthRouter from './routes/health.routes.js';
 import cacheMiddleware from './middleware/cache.js';
@@ -14,6 +16,16 @@ app.use(cors({
 app.use(express.json());
 
 app.use('/', healthRouter);
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    explorer: true,
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'Notes API Documentation'
+}));
+
+app.get('/docs', (req, res) => {
+    res.redirect('/api-docs');
+});
 
 app.use('/api/notes', cacheMiddleware(30000), notesRouter);
 
