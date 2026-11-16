@@ -1,6 +1,11 @@
 (function () {
     const BASE_URL = '/api/notes';
     let isLoading = false;
+    let currentPage = 1;
+    let totalPages = 1;
+    let currentSearch = '';
+    let currentTags = [];
+    let allTags = new Set();
 
     const createTB = document.getElementById('createTB');
     const delAll = document.getElementById('delAll');
@@ -13,6 +18,14 @@
     const menuBtn = document.getElementById('menuBtn');
     const myColorBox = document.getElementById('myColorBox');
     const buttonPanel = document.getElementById('buttonPanel');
+
+    const searchInput = document.getElementById('searchInput');
+    const tagFilter = document.getElementById('tagFilter');
+    const prevPageBtn = document.getElementById('prevPage');
+    const nextPageBtn = document.getElementById('nextPage');
+    const pageIndicator = document.getElementById('pageIndicator');
+    const loadingSkeleton = document.getElementById('loadingSkeleton');
+    const emptyState = document.getElementById('emptyState');
 
     const showToast = (message, type = 'info') => {
         const toast = document.createElement('div');
@@ -36,6 +49,26 @@
         createTB.disabled = loading;
         delAll.disabled = loading;
         colorButtons.forEach(btn => btn.disabled = loading);
+        if (prevPageBtn) prevPageBtn.disabled = loading;
+        if (nextPageBtn) nextPageBtn.disabled = loading;
+        if (searchInput) searchInput.disabled = loading;
+        if (tagFilter) tagFilter.disabled = loading;
+    };
+
+    const showSkeleton = (show) => {
+        if (loadingSkeleton) {
+            loadingSkeleton.style.display = show ? 'flex' : 'none';
+        }
+        if (notesAreaFrame) {
+            notesAreaFrame.style.display = show ? 'none' : 'flex';
+        }
+    };
+
+    const showEmptyState = (show, message = 'No notes found') => {
+        if (emptyState) {
+            emptyState.textContent = message;
+            emptyState.style.display = show ? 'block' : 'none';
+        }
     };
 
     const apiRequest = async (url, options = {}) => {
@@ -50,19 +83,56 @@
         return response.json();
     };
 
-    const fetchNotes = async () => {
+    const buildQueryString = (params) => {
+        const searchParams = new URLSearchParams();
+        Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') {
+                if (Array.isArray(value)) {
+                    value.forEach(v => searchParams.append(key, v));
+                } else {
+                    searchParams.set(key, value);
+                }
+            }
+        });
+        return searchParams.toString();
+    };
+
+    const loadNotes = async (params = {}) => {
         try {
             setLoading(true);
-            const notes = await apiRequest(BASE_URL);
-            notesAreaFrame.innerHTML = '';
-            notes.forEach(note => renderNote(note));
-            showToast(`Loaded ${notes.length} notes`, 'success');
+            showSkeleton(true);
+            showEmptyState(false);
+
+            const queryParams = {
+                page: currentPage,
+                limit: 12,
+                ...params
+            };
+
+            if (currentSearch) queryParams.search = currentSearch;
+            if (currentTags.length > 0) queryParams.tags = currentTags;
+
+            const queryString = buildQueryString(queryParams);
+            const url = `${BASE_URL}${queryString ? `?${queryString}` : ''}`;
+
+            const response = await apiRequest(url);
+            const { notes, pagination, tags } = response;
+
+            allTags = new Set(tags);
+            renderTags();
+            renderNotes(notes);
+            updatePagination(pagination);
         } catch (error) {
             showToast(`Failed to load notes: ${error.message}`, 'error');
+            renderNotes([]);
+            updatePagination({ page: 1, totalPages: 1, total: 0 });
         } finally {
             setLoading(false);
+            showSkeleton(false);
         }
     };
+
+    const fetchNotes = () => loadNotes();
 
     const createNote = async (data) => {
         try {
@@ -103,149 +173,222 @@
         try {
             setLoading(true);
             await apiRequest(`${BASE_URL}/${id}`, { method: 'DELETE' });
+            const noteEl = document.querySelector(`[data-note-id="${id}"]`);
+            if (noteEl) noteEl.remove();
             showToast('Note deleted', 'success');
         } catch (error) {
             showToast(`Failed to delete note: ${error.message}`, 'error');
-            throw error;
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const deleteAllNotes = async () => {
-        if (!confirm('Delete all notes? This cannot be undone.')) return;
-        try {
-            setLoading(true);
-            const notes = await apiRequest(BASE_URL);
-            await Promise.all(notes.map(note => deleteNote(note._id)));
-            notesAreaFrame.innerHTML = '';
-            showToast('All notes deleted', 'success');
-        } catch (error) {
-            showToast(`Failed to delete all notes: ${error.message}`, 'error');
         } finally {
             setLoading(false);
         }
     };
 
     const renderNote = (note) => {
-        const textBox = document.createElement('textarea');
-        textBox.dataset.id = note._id;
-        textBox.setAttribute('draggable', 'true');
-        textBox.classList.add('myTB');
-        textBox.value = note.content || '';
-        textBox.style.backgroundColor = note.color || 'rgba(165, 255, 165,0.7)';
-        textBox.setAttribute('placeholder', 'Type your note here...');
+        const noteEl = document.createElement('div');
+        noteEl.className = 'note';
+        noteEl.dataset.noteId = note.id;
+        noteEl.style.backgroundColor = note.color || '#fff';
 
-        let updateTimeout;
-        textBox.addEventListener('input', () => {
-            clearTimeout(updateTimeout);
-            updateTimeout = setTimeout(() => {
-                updateNote(note._id, { content: textBox.value, color: textBox.style.backgroundColor });
-            }, 500);
+        const tagsHtml = note.tags && note.tags.length > 0
+            ? `<div class="note-tags">${note.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>`
+            : '';
+
+        noteEl.innerHTML = `
+            <div class="note-header">
+                <h3 class="note-title">${escapeHtml(note.title || 'Untitled')}</h3>
+                <div class="note-actions">
+                    <button class="edit-btn" aria-label="Edit note">✏️</button>
+                    <button class="delete-btn" aria-label="Delete note">🗑️</button>
+                </div>
+            </div>
+            <div class="note-content">${escapeHtml(note.content || '')}</div>
+            ${tagsHtml}
+            <div class="note-meta">
+                <span class="note-date">${formatDate(note.updatedAt || note.createdAt)}</span>
+            </div>
+        `;
+
+        noteEl.querySelector('.edit-btn').addEventListener('click', () => openEditModal(note));
+        noteEl.querySelector('.delete-btn').addEventListener('click', () => {
+            if (confirm('Delete this note?')) deleteNote(note.id);
         });
 
-        textBox.addEventListener('dragstart', (e) => {
-            textBox.classList.add('dragging');
-            deleteArea.classList.add('visible');
-            e.dataTransfer.setData('text/plain', note._id);
-        });
-
-        textBox.addEventListener('dragend', (e) => {
-            textBox.classList.remove('dragging');
-            deleteArea.classList.remove('visible');
-            deleteArea.classList.remove('active');
-
-            const deleteRect = deleteArea.getBoundingClientRect();
-            if (
-                e.clientX >= deleteRect.left &&
-                e.clientX <= deleteRect.right &&
-                e.clientY >= deleteRect.top &&
-                e.clientY <= deleteRect.bottom
-            ) {
-                deleteNote(note._id).then(() => textBox.remove());
-            }
-        });
-
-        textBox.addEventListener('dblclick', () => {
-            textBox.style.backgroundColor = currentColor;
-            updateNote(note._id, { color: currentColor });
-        });
-
-        textBox.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            if (confirm("Delete this note?")) {
-                deleteNote(note._id).then(() => textBox.remove());
-            }
-        });
-
-        notesAreaFrame.appendChild(textBox);
+        notesAreaFrame.appendChild(noteEl);
     };
 
-    menuBtn.addEventListener('click', () => {
-        myColorBox.classList.toggle('slide');
-        buttonPanel.classList.toggle('slide');
-    });
-
-    let currentColor = 'rgba(165, 255, 165,0.7)';
-    let colorIndex = 0;
-    const defaultColors = ['rgba(165, 255, 165,0.7)', 'rgba(255, 255, 152,0.7)', 'rgba(255, 178, 191,0.7)', 'rgba(153, 255, 255,0.7)'];
-
-    const changeBg = () => {
-        if (myColor.value === '') {
-            showToast('Enter color/image url', 'error');
-            document.body.style.backgroundImage = `url("Exp6Background.jpg")`;
-            return;
+    const renderNotes = (notes) => {
+        notesAreaFrame.innerHTML = '';
+        if (notes.length === 0) {
+            showEmptyState(true, currentSearch || currentTags.length > 0
+                ? 'No notes match your search'
+                : 'No notes yet. Create your first note!');
+        } else {
+            showEmptyState(false);
+            notes.forEach(note => renderNote(note));
         }
-        document.body.style.backgroundImage = `url(${myColor.value})`;
-        document.body.style.backgroundSize = 'cover';
-        document.body.style.backgroundPosition = 'center';
-        document.body.style.backgroundColor = myColor.value;
-        myColor.value = '';
     };
 
-    changeBgBtn.addEventListener('click', changeBg);
-
-    colorButtons.forEach((button, index) => {
-        button.addEventListener('click', () => {
-            currentColor = defaultColors[index];
-            colorIndex = index;
-            colorButtons.forEach(btn => btn.style.outline = 'none');
-            button.style.outline = '2px solid black';
+    const renderTags = () => {
+        if (!tagFilter) return;
+        const selectedValues = Array.from(tagFilter.selectedOptions).map(o => o.value);
+        tagFilter.innerHTML = '';
+        allTags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            option.selected = selectedValues.includes(tag);
+            tagFilter.appendChild(option);
         });
+    };
+
+    const updatePagination = (pagination) => {
+        currentPage = pagination.page || 1;
+        totalPages = pagination.totalPages || 1;
+
+        if (pageIndicator) {
+            pageIndicator.textContent = `Page ${currentPage} of ${totalPages} (${pagination.total || 0} notes)`;
+        }
+        if (prevPageBtn) {
+            prevPageBtn.disabled = currentPage <= 1 || isLoading;
+        }
+        if (nextPageBtn) {
+            nextPageBtn.disabled = currentPage >= totalPages || isLoading;
+        }
+    };
+
+    const escapeHtml = (text) => {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    };
+
+    const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+        });
+    };
+
+    const debounce = (fn, delay) => {
+        let timeoutId;
+        return (...args) => {
+            clearTimeout(timeoutId);
+            timeoutId = setTimeout(() => fn(...args), delay);
+        };
+    };
+
+    const handleSearch = debounce((e) => {
+        currentSearch = e.target.value.trim();
+        currentPage = 1;
+        loadNotes();
+    }, 300);
+
+    const handleTagFilter = (e) => {
+        currentTags = Array.from(e.target.selectedOptions).map(o => o.value);
+        currentPage = 1;
+        loadNotes();
+    };
+
+    const handlePrevPage = () => {
+        if (currentPage > 1 && !isLoading) {
+            currentPage--;
+            loadNotes();
+        }
+    };
+
+    const handleNextPage = () => {
+        if (currentPage < totalPages && !isLoading) {
+            currentPage++;
+            loadNotes();
+        }
+    };
+
+    const openEditModal = (note) => {
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal">
+                <h2>Edit Note</h2>
+                <input type="text" id="editTitle" value="${escapeHtml(note.title || '')}" placeholder="Title" />
+                <textarea id="editContent" placeholder="Content">${escapeHtml(note.content || '')}</textarea>
+                <div class="modal-tags">
+                    <label>Tags (comma separated):</label>
+                    <input type="text" id="editTags" value="${(note.tags || []).join(', ')}" />
+                </div>
+                <div class="modal-colors">
+                    ${['#fff', '#fef9c3', '#fecaca', '#bbf7d0', '#bfdbfe', '#e9d5ff', '#fbcfe8'].map(c =>
+                        `<button class="color-pick${note.color === c ? ' selected' : ''}" style="background:${c}" data-color="${c}"></button>`
+                    ).join('')}
+                </div>
+                <div class="modal-actions">
+                    <button id="saveEdit">Save</button>
+                    <button id="cancelEdit">Cancel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+
+        const selectedColor = { value: note.color || '#fff' };
+        modal.querySelectorAll('.color-pick').forEach(btn => {
+            btn.addEventListener('click', () => {
+                modal.querySelectorAll('.color-pick').forEach(b => b.classList.remove('selected'));
+                btn.classList.add('selected');
+                selectedColor.value = btn.dataset.color;
+            });
+        });
+
+        modal.querySelector('#saveEdit').addEventListener('click', async () => {
+            const title = modal.querySelector('#editTitle').value.trim();
+            const content = modal.querySelector('#editContent').value.trim();
+            const tags = modal.querySelector('#editTags').value.split(',').map(t => t.trim()).filter(Boolean);
+            if (!title && !content) return showToast('Title or content required', 'error');
+            await updateNote(note.id, { title, content, tags, color: selectedColor.value });
+            modal.remove();
+            loadNotes();
+        });
+
+        modal.querySelector('#cancelEdit').addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    };
+
+    const initEventListeners = () => {
+        if (searchInput) searchInput.addEventListener('input', handleSearch);
+        if (tagFilter) tagFilter.addEventListener('change', handleTagFilter);
+        if (prevPageBtn) prevPageBtn.addEventListener('click', handlePrevPage);
+        if (nextPageBtn) nextPageBtn.addEventListener('click', handleNextPage);
+
+        createTB.addEventListener('click', () => openEditModal({ id: null, title: '', content: '', tags: [], color: '#fff' }));
+        delAll.addEventListener('click', async () => {
+            if (confirm('Delete ALL notes? This cannot be undone.')) {
+                try {
+                    setLoading(true);
+                    await apiRequest(BASE_URL, { method: 'DELETE' });
+                    notesAreaFrame.innerHTML = '';
+                    showToast('All notes deleted', 'success');
+                    loadNotes();
+                } catch (error) {
+                    showToast(`Failed to delete all: ${error.message}`, 'error');
+                } finally {
+                    setLoading(false);
+                }
+            }
+        });
+
+        colorButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                myTBcolor.value = btn.dataset.color;
+                myColor.value = btn.dataset.color;
+            });
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initEventListeners();
+        loadNotes();
     });
 
-    myTBcolor.addEventListener('input', () => {
-        currentColor = myTBcolor.value + '80';
-    });
-
-    createTB.addEventListener('click', () => {
-        createNote({
-            title: 'Untitled',
-            content: '',
-            color: currentColor
-        }).catch(() => {});
-    });
-
-    delAll.addEventListener('click', deleteAllNotes);
-
-    deleteArea.addEventListener('dragover', e => {
-        e.preventDefault();
-        deleteArea.classList.add('active');
-    });
-
-    deleteArea.addEventListener('dragleave', () => {
-        deleteArea.classList.remove('active');
-    });
-
-    const style = document.createElement('style');
-    style.textContent = `
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes slideOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
-        .dragging { opacity: 0.5; cursor: grabbing; }
-        #deleteArea.visible { opacity: 1; pointer-events: auto; }
-        #deleteArea.active { background: rgba(231, 76, 60, 0.3); border-color: #e74c3c; }
-    `;
-    document.head.appendChild(style);
-
-    fetchNotes();
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { loadNotes, createNote, updateNote, deleteNote };
+    }
 })();
