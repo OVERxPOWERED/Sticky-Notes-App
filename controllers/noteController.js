@@ -15,7 +15,7 @@ const handleError = (error, res) => {
   return res.status(500).json({ error: 'Internal server error' });
 };
 
-const getAllNotes = async (req, res, next) => {
+const getAllNotes = async (req, res) => {
   try {
     const notes = await NoteService.getAllNotes();
     res.status(200).json(notes);
@@ -24,7 +24,7 @@ const getAllNotes = async (req, res, next) => {
   }
 };
 
-const getNoteById = async (req, res, next) => {
+const getNoteById = async (req, res) => {
   try {
     const { id } = req.params;
     const note = await NoteService.getNoteById(id);
@@ -34,28 +34,26 @@ const getNoteById = async (req, res, next) => {
   }
 };
 
-const createNote = async (req, res, next) => {
+const createNote = async (req, res) => {
   try {
-    const noteData = req.body;
-    const note = await NoteService.createNote(noteData);
+    const note = await NoteService.createNote(req.body);
     res.status(201).json(note);
   } catch (error) {
     handleError(error, res);
   }
 };
 
-const updateNote = async (req, res, next) => {
+const updateNote = async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
-    const note = await NoteService.updateNote(id, updateData);
+    const note = await NoteService.updateNote(id, req.body);
     res.status(200).json(note);
   } catch (error) {
     handleError(error, res);
   }
 };
 
-const deleteNote = async (req, res, next) => {
+const deleteNote = async (req, res) => {
   try {
     const { id } = req.params;
     await NoteService.deleteNote(id);
