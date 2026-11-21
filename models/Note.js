@@ -37,6 +37,29 @@ const noteSchema = new mongoose.Schema({
     required: true,
     default: () => ({ x: 0, y: 0 })
   },
+  category: {
+    type: String,
+    enum: ['personal', 'work', 'shopping', 'ideas', 'other'],
+    default: 'personal',
+    index: true
+  },
+  tags: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: function(tags) {
+        if (!Array.isArray(tags)) return false;
+        if (tags.length > 10) return false;
+        return tags.every(tag => 
+          typeof tag === 'string' && 
+          tag.trim().length > 0 && 
+          tag.trim().length <= 20
+        );
+      },
+      message: 'Tags must be an array of strings (max 10 tags, each max 20 characters)'
+    },
+    index: true
+  },
   isDeleted: {
     type: Boolean,
     default: false,
@@ -64,6 +87,17 @@ const noteSchema = new mongoose.Schema({
   }
 });
 
+// Pre-save middleware to trim tags
+noteSchema.pre('save', function(next) {
+  if (this.isModified('tags') && Array.isArray(this.tags)) {
+    this.tags = this.tags
+      .map(tag => tag.trim())
+      .filter(tag => tag.length > 0)
+      .slice(0, 10);
+  }
+  next();
+});
+
 // Compound index for listing user's notes sorted by creation date (newest first)
 // Used by: GET /api/notes?userId=:userId
 noteSchema.index({ userId: 1, createdAt: -1 });
@@ -79,6 +113,14 @@ noteSchema.index(
   { userId: 1, isDeleted: 1 },
   { partialFilterExpression: { isDeleted: false } }
 );
+
+// Compound index for category-based filtering with sort by creation date
+// Used by: GET /api/notes?userId=:userId&category=:category
+noteSchema.index({ category: 1, createdAt: -1 });
+
+// Compound index for tag-based filtering with sort by creation date
+// Used by: GET /api/notes?userId=:userId&tags=:tag1,:tag2
+noteSchema.index({ tags: 1, createdAt: -1 });
 
 // Legacy indexes for backward compatibility
 noteSchema.index({ updatedAt: -1 });
@@ -98,10 +140,29 @@ noteSchema.statics.findAll = async function() {
 };
 
 noteSchema.statics.findByUserId = async function(userId, options = {}) {
-  const { sort = { createdAt: -1 }, limit, skip } = options;
-  const query = this.find({ userId, isDeleted: false }).sort(sort);
+  const { 
+    sort = { createdAt: -1 }, 
+    limit, 
+    skip,
+    category,
+    tags
+  } = options;
+  
+  const query = this.find({ userId, isDeleted: false });
+  
+  if (category) {
+    query.where('category').equals(category);
+  }
+  
+  if (tags && Array.isArray(tags) && tags.length > 0) {
+    query.where('tags').in(tags);
+  }
+  
+  query.sort(sort);
+  
   if (skip) query.skip(skip);
   if (limit) query.limit(limit);
+  
   return await query.exec();
 };
 
